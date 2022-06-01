@@ -14,6 +14,7 @@ from kivy.properties import StringProperty
 from player import Player
 import random
 from functools import partial
+import numpy as np
 
 # Constants
 NORMAL_IMAGES = ("resources/images/Rock.png",
@@ -36,11 +37,16 @@ LOSE_IMAGES = ("resources/images/Rock_red.png",
                "resources/images/Scissors_red.png",
                "resources/images/Lizard_red.png",
                "resources/images/Spock_red.png")
-BUTTONS_POSITIONS = ((0.5, 0.70),
-                     (0.8, 0.55),
-                     (0.65, 0.35),
-                     (0.35, 0.35),
-                     (0.2, 0.55))
+# BUTTONS_POSITIONS = ((0.5, 0.70),
+#                      (0.8, 0.55),
+#                      (0.65, 0.35),
+#                      (0.35, 0.35),
+#                      (0.2, 0.55))
+
+CHOICES_NUMBER = 5
+CIRCLE_ORIGIN_X = 0.5
+CIRCLE_ORIGIN_Y = 0.5
+RADIUS = 0.25
 
 
 class MainWidget(RelativeLayout):
@@ -53,41 +59,68 @@ class MainWidget(RelativeLayout):
 
     def __init__(self, **kwargs):
         super(MainWidget, self).__init__(**kwargs)
+        # Initialize players
         self.player = Player("Player", 0, 0)
         self.ia = Player("I.A.", 0, 0)
         self.player_name_txt = self.player.name
         self.ia_name_txt = self.ia.name
+        # Initialize buttons
         self.create_buttons()
 
+    @staticmethod
+    def calculate_coordinates_button(button_index):
+        angle = (360 / CHOICES_NUMBER * (button_index + 1) + 18) % 360
+        x = round(RADIUS * np.cos(np.radians(angle)) + CIRCLE_ORIGIN_X, 2)
+        y = round(RADIUS * np.sin(np.radians(angle)) + CIRCLE_ORIGIN_Y, 2)
+        x, y = float(x), float(y)
+        return x, y
+
     def create_buttons(self):
-        for i in range(0, 5):
+        for i in range(0, CHOICES_NUMBER):
+            x, y = self.calculate_coordinates_button(i)
             b = Button(
-                size_hint=(0.25, 0.15),
-                pos_hint={"center_x": BUTTONS_POSITIONS[i][0], "center_y": BUTTONS_POSITIONS[i][1]},
+                size_hint=(None, None),
+                size=(165, 165),
+                pos_hint={"center_x": x, "center_y": y},
                 background_normal=NORMAL_IMAGES[i],
                 background_down=DOWN_IMAGES[i]
             )
-            b.on_press = partial(self.play, i+1)
+            b.on_press = partial(self.play, i+1)  # Starts from 1-Rock
             self.add_widget(b)
             self.buttons_list.append(b)
 
+    @staticmethod
+    def change_button_image(button, mode, index):
+        if mode == "normal":
+            button.background_normal = NORMAL_IMAGES[index]
+        elif mode == "win":
+            button.background_normal = WIN_IMAGES[index]
+        elif mode == "lose":
+            button.background_normal = LOSE_IMAGES[index]
+        elif mode == "tie":
+            button.background_normal = DOWN_IMAGES[index]
+
+    def update_scores(self):
+        self.player_score_txt = str(self.player.score)
+        self.ia_score_txt = str(self.ia.score)
+
     def play(self, selection):
+        # Reset images of all buttons
         for i, button in enumerate(self.buttons_list):
-            button.background_normal = NORMAL_IMAGES[i]
+            self.change_button_image(button, "normal", i)
+        # Plays from players (random in case of computer)
         self.player.play(selection)
-        self.ia.play(random.randint(1, 5))
+        self.ia.play(random.randint(1, CHOICES_NUMBER))
         # print(self.ia.category)  # DEBUG
         result = self.player.compare(self.ia)
         self.update_scores()
         self.result_txt = result[0]
         # print(result)  # DEBUG
-        if not result[1:] == (0, 0):
-            self.buttons_list[result[1]].background_normal = WIN_IMAGES[result[1]]
-            self.buttons_list[result[2]].background_normal = LOSE_IMAGES[result[2]]
-
-    def update_scores(self):
-        self.player_score_txt = str(self.player.score)
-        self.ia_score_txt = str(self.ia.score)
+        if not result[1] == -1:  # win or lose
+            self.change_button_image(self.buttons_list[result[1]], "win", result[1])
+            self.change_button_image(self.buttons_list[result[2]], "lose", result[2])
+        else:  # tie
+            self.change_button_image(self.buttons_list[result[2]], "tie", result[2])
 
 
 class RpslsApp(App):
